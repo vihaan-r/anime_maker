@@ -1,34 +1,20 @@
-# anime_maker
-a ai based custom anime maker (18-23min anime EP)
-# AI Anime Episode Generator
-Welcome to the **AI Anime Episode Generator**—a groundbreaking tool that lets you create full-length anime episodes with AI! Whether you’re dreaming up a *Naruto*-style ninja showdown or a *Solo Leveling*-inspired dungeon crawl, this project turns your scripts and character ideas into animated videos complete with voices, lip-syncing, and sound effects. Built with cutting-edge models like Stable Diffusion XL, AnimateDiff, and Bark, it’s your ticket to becoming an anime creator—no studio required!
+<div align="center">
+<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
+</div>
 
-## 🌟 What It Does
-- **Full Episodes:** Generate 18- or 23-minute anime episodes from text scripts.
-- **Custom Characters:** Upload your own character images to star in the show.
-- **Dynamic Animation:** Turn static scenes into moving battles or calm moments with AI-powered animation.
-- **Voice & Audio:** Add synthetic voices, lip-sync them to characters, and layer in sound effects like explosions or crowd noise.
-- **User-Friendly:** Launch it with a sleek Gradio interface—no coding needed to start creating.
+# Run and deploy your AI Studio app
 
-## 🎬 Demo
-Check out this sample episode: [Insert YouTube link or GIF here]  
-Naruto vs. Sasuke, generated in minutes—imagine what *you* could make!
+This contains everything you need to run your app locally.
 
-## 🚀 Features
-- **Visuals:** High-quality anime art via Stable Diffusion XL, upscaled with Real-ESRGAN, and enhanced with GFPGAN.
-- **Animation:** Smooth motion powered by AnimateDiff for epic battles or subtle moments.
-- **Audio:** Voices from Bark, synced with Wav2Lip, plus custom SFX for immersion.
-- **Flexibility:** Supports any anime style—shonen, shojo, mecha, you name it!
-- **Open Source:** Free to use, modify, and share under the [MIT License](#license).
+View your app in AI Studio: https://ai.studio/apps/drive/1rj-_y-GIqEmDVeuJwDlEco9Cb3K8XPP9
 
-## 🛠️ How to Set It Up
-### Prerequisites
-- Python 3.8+
-- A CUDA-enabled GPU (recommended for speed, CPU works too)
-- Git installed
+## Run Locally
 
-### Installation
-1. Clone the repo:
-   ```bash
-   git clone https://github.com/[YourUsername]/AI-Anime-Generator.git
-   cd AI-Anime-Generator
+**Prerequisites:**  Node.js
+
+
+1. Install dependencies:
+   `npm install`
+2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
+3. Run the app:
+   `npm run dev`
