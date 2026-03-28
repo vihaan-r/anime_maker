@@ -3,6 +3,7 @@ set -euo pipefail
 
 APP_NAME="Phantom Lockdown"
 APP_ID="com.phantom.lockdown"
+WEB_DIR="www"
 
 if ! command -v node >/dev/null 2>&1; then
   echo "❌ Node.js is required (v20+ recommended)." >&2
@@ -15,9 +16,23 @@ fi
 
 npm install @capacitor/core @capacitor/cli @capacitor/android --save-dev
 
-if [ ! -f capacitor.config.ts ] && [ ! -f capacitor.config.json ] && [ ! -f capacitor.config.js ]; then
-  npx cap init "$APP_NAME" "$APP_ID" --web-dir .
+# Capacitor does not accept '.' as webDir. Build a dedicated web bundle folder.
+rm -rf "$WEB_DIR"
+mkdir -p "$WEB_DIR"
+cp index.html "$WEB_DIR"/
+cp game.js "$WEB_DIR"/
+cp styles.css "$WEB_DIR"/
+if [ -d assets ]; then
+  cp -R assets "$WEB_DIR"/
 fi
+
+cat > capacitor.config.json <<CONFIG
+{
+  "appId": "$APP_ID",
+  "appName": "$APP_NAME",
+  "webDir": "$WEB_DIR"
+}
+CONFIG
 
 if [ ! -d android ]; then
   npx cap add android

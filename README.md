@@ -68,13 +68,21 @@ npm i -D @capacitor/core @capacitor/cli @capacitor/android
 3. Initialize Capacitor (one-time):
 
 ```bash
-npx cap init "Phantom Lockdown" "com.phantom.lockdown" --web-dir .
+npx cap init "Phantom Lockdown" "com.phantom.lockdown" --web-dir www
 ```
 
 4. Add Android platform (one-time):
 
 ```bash
 npx cap add android
+```
+
+Before Capacitor sync/build, copy web files into `www`:
+
+```bash
+rm -rf www
+mkdir -p www
+cp index.html game.js styles.css www/
 ```
 
 5. Sync web assets into Android project:
@@ -112,6 +120,7 @@ Do these checks:
 
 Common fixes:
 
+- If you get `"." is not a valid value for webDir`, set `webDir` to `www` (not `.`) and copy files into `www` before `npx cap sync android`.
 - Ensure `ANDROID_HOME` is set and SDK tools are installed.
 - In Android Studio, install a recent Android SDK Platform + Build-Tools.
 - Run once in Android Studio to auto-accept SDK components.
