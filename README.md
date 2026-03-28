@@ -1,10 +1,12 @@
-# Phantom Lockdown (Mobile Horror Escape Prototype)
+# Whispering Shadows (Mobile Horror Escape Prototype)
 
 This repository contains a **3D mobile horror escape game prototype** inspired by tense house-survival gameplay loops.
 
+For the full production-grade design and build roadmap, see `WHISPERING_SHADOWS_AAA_PLAN.md` and `design/whispering_shadows_game_config.json`.
+
 ## Latest gameplay upgrade
 
-- New horror branding/logo: **Bloodline: Blackout Manor**.
+- New horror branding/logo: **Whispering Shadows**.
 - New loading/start sequence with animated progress + creepy audio pulses.
 - Real joystick movement + dedicated crouch and fire buttons.
 - Free-look controls (touch drag on right zone + pointer-lock mouse look).
