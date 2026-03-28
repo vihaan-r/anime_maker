@@ -28,6 +28,11 @@ const ui = {
   keys: document.getElementById('keys'),
   stamina: document.getElementById('stamina'),
   ammo: document.getElementById('ammo'),
+  sanity: document.getElementById('sanity'),
+  health: document.getElementById('health'),
+  noise: document.getElementById('noise'),
+  daytime: document.getElementById('daytime'),
+  inventoryOverlay: document.getElementById('inventoryOverlay'),
   threat: document.getElementById('threat')
 };
 
@@ -39,8 +44,15 @@ const game = {
   keysFound: 0,
   ammo: 0,
   stamina: 100,
+  sanity: 100,
+  health: 3,
+  noiseLevel: 0,
+  daySeconds: 0,
+  dayIndex: 1,
   running: false,
   crouching: false,
+  holdBreath: false,
+  inventoryOpen: false,
   gateUnlocked: false,
   loadingDone: false
 };
@@ -113,6 +125,15 @@ function updateHUD() {
   ui.keys.textContent = `${game.keysFound} / ${game.keysTotal}`;
   ui.stamina.textContent = `${Math.round(game.stamina)}%`;
   ui.ammo.textContent = `${game.ammo}`;
+  ui.sanity.textContent = `${Math.round(game.sanity)}%`;
+  ui.health.textContent = `${game.health} / 3`;
+  ui.noise.textContent = game.noiseLevel > 0.66 ? 'High' : game.noiseLevel > 0.33 ? 'Medium' : 'Low';
+
+  const total = game.daySeconds % (20 * 60);
+  const phaseHour = Math.floor((total / (20 * 60)) * 24);
+  const hh = String(phaseHour).padStart(2, '0');
+  ui.daytime.textContent = `Day ${game.dayIndex} · ${hh}:00`;
+
   ui.threat.textContent = ghost.stunned > 0 ? 'Stunned' : ghost.rage ? 'Hunting' : 'Searching';
 }
 
@@ -407,6 +428,30 @@ function setupControls() {
     camera.position.y = game.crouching ? 1.0 : 1.7;
   });
 
+  const actionBtn = document.getElementById('actionBtn');
+  actionBtn.addEventListener('touchstart', () => {
+    tone(500, 0.06, 'triangle', 0.03);
+  });
+
+  const holdBtn = document.getElementById('holdBreathBtn');
+  holdBtn.addEventListener('touchstart', () => {
+    game.holdBreath = true;
+    holdBtn.style.background = 'rgba(31,160,94,.45)';
+  });
+  holdBtn.addEventListener('touchend', () => {
+    game.holdBreath = false;
+    holdBtn.style.background = 'rgba(255,255,255,.14)';
+  });
+
+  const invBtn = document.getElementById('inventoryBtn');
+  const closeInvBtn = document.getElementById('closeInventoryBtn');
+  const toggleInventory = () => {
+    game.inventoryOpen = !game.inventoryOpen;
+    ui.inventoryOverlay.classList.toggle('visible', game.inventoryOpen);
+  };
+  invBtn.addEventListener('touchstart', toggleInventory);
+  closeInvBtn.addEventListener('click', toggleInventory);
+
   const fireBtn = document.getElementById('fireBtn');
   const fire = () => {
     if (!game.started || game.over || game.won || game.ammo <= 0) return;
@@ -432,6 +477,34 @@ function inClosetCover() {
     if (c.position.distanceTo(player.pos) < 2.2) return true;
   }
   return false;
+}
+
+
+function updateDayNightAndSanity(dt) {
+  game.daySeconds += dt;
+  const cycle = game.daySeconds % (20 * 60);
+  const isNight = cycle > 12 * 60;
+  const isTwilight = cycle > 8 * 60 && cycle <= 12 * 60;
+
+  ghost.speed = isNight ? 1.7 : isTwilight ? 1.5 : 1.35;
+  ghost.rageSpeed = isNight ? 2.7 : isTwilight ? 2.45 : 2.25;
+
+  const dist = ghost.pos.distanceTo(player.pos);
+  let sanityDelta = 0;
+  if (isNight) sanityDelta -= dt * 1.2;
+  if (dist < 8) sanityDelta -= dt * (8 - dist) * 0.8;
+  if (game.holdBreath) sanityDelta -= dt * 2.1;
+  if (!ghost.rage && dist > 13) sanityDelta += dt * 0.55;
+  game.sanity = THREE.MathUtils.clamp(game.sanity + sanityDelta, 0, 100);
+
+  if (game.sanity < 30) {
+    camera.rotation.z = Math.sin(performance.now() * 0.003) * 0.01;
+  } else {
+    camera.rotation.z = 0;
+  }
+
+  const currentDay = Math.floor(game.daySeconds / (20 * 60)) + 1;
+  game.dayIndex = Math.min(7, currentDay);
 }
 
 function ambientAndThreatSounds(dt) {
@@ -493,6 +566,9 @@ function updatePlayer(dt) {
     game.stamina = Math.min(100, game.stamina + dt * 13);
   }
 
+  const moving = moveDir.lengthSq() > 0.002;
+  game.noiseLevel = moving ? (game.running ? 1 : game.crouching ? 0.2 : 0.5) : Math.max(0, game.noiseLevel - dt * 1.8);
+
   const candidate = player.pos.clone().addScaledVector(moveDir, speed * dt);
   candidate.x = THREE.MathUtils.clamp(candidate.x, world.boundsMin.x + 1.2, world.boundsMax.x - 1.2);
   candidate.z = THREE.MathUtils.clamp(candidate.z, world.boundsMin.z + 1.2, world.boundsMax.z - 1.2);
@@ -521,9 +597,10 @@ function updateGhost(dt) {
 
   const toPlayer = player.pos.clone().sub(ghost.pos);
   const dist = toPlayer.length();
+  const hears = dist < (game.noiseLevel > 0.66 ? 15 : game.noiseLevel > 0.33 ? 8 : 5);
   const visible = dist < 17 && hasLineOfSight(ghost.pos, player.pos) && !(game.crouching && inClosetCover());
 
-  if (visible) {
+  if (visible || hears) {
     ghost.rage = true;
     ghost.cooldown = 5;
   } else {
@@ -550,6 +627,13 @@ function updateGhost(dt) {
   ghost.root.lookAt(player.pos.x, ghost.pos.y + 1, player.pos.z);
 
   if (dist < 1.45) {
+    game.health -= 1;
+    if (game.health > 0 && (game.daySeconds % (20 * 60)) < (12 * 60)) {
+      player.pos.set((Math.random() - 0.5) * 20, player.pos.y, (Math.random() - 0.5) * 20);
+      ghost.pos.set((Math.random() - 0.5) * 20, ghost.pos.y, -24);
+      tone(110, 0.2, 'triangle', 0.06);
+      return;
+    }
     game.over = true;
     ui.deathOverlay.classList.add('visible');
     let t = 0;
@@ -583,6 +667,7 @@ function animate() {
     updatePlayer(dt);
     updateGhost(dt);
     updateItems();
+    updateDayNightAndSanity(dt);
     ambientAndThreatSounds(dt);
     checkWin();
     updateHUD();

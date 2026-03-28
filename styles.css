@@ -90,7 +90,8 @@ canvas { display: block; }
   position: absolute;
   right: 16px;
   bottom: 18px;
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(3, auto);
   gap: 10px;
   pointer-events: auto;
 }
@@ -164,4 +165,20 @@ canvas { display: block; }
   .stick { width: 52px; height: 52px; }
   .controlBtn { width: 70px; height: 70px; font-size: 11px; }
   #hud { min-width: 225px; }
+}
+
+
+.invGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(70px, 1fr));
+  gap: 10px;
+  margin: 12px 0;
+}
+.slot {
+  height: 60px;
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,.3);
+  display: grid;
+  place-items: center;
+  background: rgba(255,255,255,.06);
 }

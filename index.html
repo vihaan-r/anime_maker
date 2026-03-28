@@ -58,6 +58,10 @@
       <div class="stat"><span>Keys</span> <span id="keys">0 / 3</span></div>
       <div class="stat"><span>Stamina</span> <span id="stamina">100%</span></div>
       <div class="stat"><span>Ammo</span> <span id="ammo">0</span></div>
+      <div class="stat"><span>Sanity</span> <span id="sanity">100%</span></div>
+      <div class="stat"><span>Health</span> <span id="health">3 / 3</span></div>
+      <div class="stat"><span>Noise</span> <span id="noise">Low</span></div>
+      <div class="stat"><span>Time</span> <span id="daytime">Day 1 · 08:00</span></div>
       <div class="stat"><span>Threat</span> <span id="threat">Searching</span></div>
     </div>
 
@@ -69,7 +73,22 @@
       <div class="rightButtons">
         <button id="runBtn" class="controlBtn">RUN</button>
         <button id="crouchBtn" class="controlBtn">CROUCH</button>
+        <button id="actionBtn" class="controlBtn">ACTION</button>
+        <button id="holdBreathBtn" class="controlBtn">HOLD</button>
+        <button id="inventoryBtn" class="controlBtn">INV</button>
         <button id="fireBtn" class="controlBtn">FIRE</button>
+      </div>
+    </div>
+
+
+    <div id="inventoryOverlay" class="overlay">
+      <div class="panel">
+        <h2>Inventory (6 slots)</h2>
+        <div id="inventorySlots" class="invGrid">
+          <div class="slot">1</div><div class="slot">2</div><div class="slot">3</div>
+          <div class="slot">4</div><div class="slot">5</div><div class="slot">6</div>
+        </div>
+        <button id="closeInventoryBtn">Close</button>
       </div>
     </div>
 
