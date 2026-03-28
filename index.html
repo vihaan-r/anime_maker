@@ -3,57 +3,74 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>Phantom Lockdown</title>
+    <title>Bloodline: Blackout Manor</title>
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
-    <div id="startOverlay" class="overlay visible">
+    <div id="loadingOverlay" class="overlay visible">
+      <div class="panel loadingPanel">
+        <div class="logoMark">🩸</div>
+        <h1 class="logoText">BLOODLINE<br/>BLACKOUT MANOR</h1>
+        <p class="tag">ESCAPE BEFORE IT LEARNS YOUR BREATH</p>
+        <div class="loadingBar"><div id="loadingFill"></div></div>
+        <p id="loadingHint">Waking the house...</p>
+      </div>
+    </div>
+
+    <div id="startOverlay" class="overlay">
       <div class="panel">
-        <h1>PHANTOM LOCKDOWN</h1>
+        <h2>Night Protocol</h2>
         <p>
-          Escape the haunted mansion before the ghost catches you.<br />
-          Find <strong>3 relic keys</strong>, unlock the basement gate, and survive.
+          Collect relic keys, find ammo, survive the blood-covered stalker, and escape through the basement gate.
         </p>
         <ul>
-          <li>Left joystick: movement</li>
-          <li>Right drag: camera</li>
-          <li>HIDE button: crouch behind furniture</li>
-          <li>RUN button: sprint (limited stamina)</li>
+          <li>Left joystick = Move</li>
+          <li>Right side drag = Free Look</li>
+          <li>CROUCH = hide under beds/behind closets</li>
+          <li>FIRE = stun ghost briefly (limited ammo)</li>
         </ul>
-        <button id="startBtn">Start Nightmare</button>
+        <button id="startBtn">ENTER MANOR</button>
       </div>
     </div>
 
     <div id="deathOverlay" class="overlay">
       <div class="panel danger">
-        <h2>YOU WERE TAKEN</h2>
-        <p>The spirit dragged you into the dark.</p>
-        <button id="retryBtn">Try Again</button>
+        <h2>YOU WERE HUNTED</h2>
+        <p>The thing dragged you into the hidden room.</p>
+        <button id="retryBtn">Retry Nightmare</button>
       </div>
     </div>
 
     <div id="winOverlay" class="overlay">
       <div class="panel success">
         <h2>YOU ESCAPED</h2>
-        <p>You broke the curse and fled the house.</p>
+        <p>You made it out of Blackout Manor alive.</p>
         <button id="playAgainBtn">Play Again</button>
       </div>
     </div>
 
+    <header id="brandHeader">
+      <div class="brand">BLOODLINE <span>BLACKOUT MANOR</span></div>
+    </header>
+
     <div id="hud">
-      <div class="stat"><span>Objective:</span> <span id="objective">Find 3 relic keys</span></div>
-      <div class="stat"><span>Keys:</span> <span id="keys">0 / 3</span></div>
-      <div class="stat"><span>Stamina:</span> <span id="stamina">100%</span></div>
-      <div class="stat"><span>Ghost:</span> <span id="threat">Searching</span></div>
+      <div class="stat"><span>Objective</span> <span id="objective">Find relic keys</span></div>
+      <div class="stat"><span>Keys</span> <span id="keys">0 / 3</span></div>
+      <div class="stat"><span>Stamina</span> <span id="stamina">100%</span></div>
+      <div class="stat"><span>Ammo</span> <span id="ammo">0</span></div>
+      <div class="stat"><span>Threat</span> <span id="threat">Searching</span></div>
     </div>
 
     <div id="controls">
-      <div id="movePad" class="pad"></div>
+      <div id="joystick" class="joystick">
+        <div id="stick" class="stick"></div>
+      </div>
+      <div id="lookZone" aria-label="free look zone"></div>
       <div class="rightButtons">
         <button id="runBtn" class="controlBtn">RUN</button>
-        <button id="hideBtn" class="controlBtn">HIDE</button>
+        <button id="crouchBtn" class="controlBtn">CROUCH</button>
+        <button id="fireBtn" class="controlBtn">FIRE</button>
       </div>
-      <div id="lookPad" class="pad look">LOOK</div>
     </div>
 
     <script type="module" src="game.js"></script>

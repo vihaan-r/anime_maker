@@ -2,6 +2,18 @@
 
 This repository contains a **3D mobile horror escape game prototype** inspired by tense house-survival gameplay loops.
 
+## Latest gameplay upgrade
+
+- New horror branding/logo: **Bloodline: Blackout Manor**.
+- New loading/start sequence with animated progress + creepy audio pulses.
+- Real joystick movement + dedicated crouch and fire buttons.
+- Free-look controls (touch drag on right zone + pointer-lock mouse look).
+- Scarier humanoid ghost with blood/tooth details and walking animation.
+- Better proximity-based ghost ambience/sound pressure.
+- Expanded map props: closets, beds, drawers, stairs, hidden-room layout.
+- Gun/ammo pickups and ghost stun mechanic.
+- Randomized key spawn points with key-shaped 3D pickups.
+
 ## What is already built
 
 - Full-screen 3D environment with textured floors/walls/ceiling.

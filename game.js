@@ -3,376 +3,500 @@ import * as THREE from 'https://unpkg.com/three@0.166.1/build/three.module.js';
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true;
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 document.body.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
-scene.fog = new THREE.FogExp2(0x07080b, 0.06);
+scene.background = new THREE.Color(0x040509);
+scene.fog = new THREE.FogExp2(0x090a0f, 0.045);
 
-const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 400);
-camera.position.set(0, 1.7, 0);
+const camera = new THREE.PerspectiveCamera(72, window.innerWidth / window.innerHeight, 0.1, 350);
+camera.position.set(0, 1.7, 20);
 
 const listener = new THREE.AudioListener();
 camera.add(listener);
+const audioCtx = listener.context;
 
 const ui = {
+  loadingOverlay: document.getElementById('loadingOverlay'),
+  loadingFill: document.getElementById('loadingFill'),
+  loadingHint: document.getElementById('loadingHint'),
+  startOverlay: document.getElementById('startOverlay'),
+  deathOverlay: document.getElementById('deathOverlay'),
+  winOverlay: document.getElementById('winOverlay'),
   objective: document.getElementById('objective'),
   keys: document.getElementById('keys'),
   stamina: document.getElementById('stamina'),
-  threat: document.getElementById('threat'),
-  start: document.getElementById('startOverlay'),
-  death: document.getElementById('deathOverlay'),
-  win: document.getElementById('winOverlay')
+  ammo: document.getElementById('ammo'),
+  threat: document.getElementById('threat')
 };
 
 const game = {
   started: false,
   over: false,
   won: false,
-  totalKeys: 3,
+  keysTotal: 3,
   keysFound: 0,
+  ammo: 0,
   stamina: 100,
   running: false,
-  hiding: false,
-  velocityY: 0,
-  gravity: -16,
-  speed: 2,
-  runSpeed: 3.8,
-  ghostAwareness: 0,
-  gateUnlocked: false
+  crouching: false,
+  gateUnlocked: false,
+  loadingDone: false
+};
+
+const player = {
+  pos: new THREE.Vector3(0, 1.7, 20),
+  yaw: Math.PI,
+  pitch: 0,
+  move: new THREE.Vector2(0, 0)
+};
+
+const ghost = {
+  root: null,
+  pos: new THREE.Vector3(0, 0.9, -24),
+  speed: 1.35,
+  rageSpeed: 2.25,
+  rage: false,
+  cooldown: 0,
+  stunned: 0,
+  footPhase: 0,
+  howlTimer: 0
 };
 
 const world = {
   walls: [],
   props: [],
+  closets: [],
   keys: [],
-  houseMin: new THREE.Vector3(-24, 0, -24),
-  houseMax: new THREE.Vector3(24, 0, 24)
-};
-
-const player = {
-  pos: new THREE.Vector3(0, 1.7, 17),
-  yaw: Math.PI,
-  pitch: 0,
-  lookTouchId: null,
-  moveTouchId: null,
-  moveVec: new THREE.Vector2(),
-  lookPrev: null
-};
-
-const ghost = {
-  mesh: null,
-  pos: new THREE.Vector3(0, 0.8, -16),
-  speed: 1.4,
-  rageSpeed: 2.2,
-  rage: false,
-  cooldown: 0
+  ammoPickups: [],
+  stairs: [],
+  hiddenRoomCenter: new THREE.Vector3(23, 0, 23),
+  boundsMin: new THREE.Vector3(-31, 0, -31),
+  boundsMax: new THREE.Vector3(31, 0, 31)
 };
 
 const clock = new THREE.Clock();
 const loader = new THREE.TextureLoader();
 
-function makeTextures() {
-  const floorTex = loader.load('https://threejs.org/examples/textures/hardwood2_diffuse.jpg');
-  floorTex.wrapS = floorTex.wrapT = THREE.RepeatWrapping;
-  floorTex.repeat.set(12, 12);
-
-  const wallTex = loader.load('https://threejs.org/examples/textures/brick_diffuse.jpg');
-  wallTex.wrapS = wallTex.wrapT = THREE.RepeatWrapping;
-  wallTex.repeat.set(10, 2);
-
-  const roofTex = loader.load('https://threejs.org/examples/textures/uv_grid_opengl.jpg');
-  roofTex.wrapS = roofTex.wrapT = THREE.RepeatWrapping;
-  roofTex.repeat.set(8, 8);
-
-  return { floorTex, wallTex, roofTex };
+function tone(freq, duration, type = 'sine', volume = 0.07, glide = 0) {
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.type = type;
+  osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+  if (glide) osc.frequency.linearRampToValueAtTime(freq + glide, audioCtx.currentTime + duration);
+  gain.gain.setValueAtTime(volume, audioCtx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + duration);
+  osc.connect(gain);
+  gain.connect(audioCtx.destination);
+  osc.start();
+  osc.stop(audioCtx.currentTime + duration);
 }
 
-const tex = makeTextures();
-
-function setupLighting() {
-  scene.add(new THREE.HemisphereLight(0x5f7592, 0x0d0a07, 0.2));
-
-  const moon = new THREE.DirectionalLight(0x9cb1d0, 0.35);
-  moon.position.set(16, 20, -8);
-  moon.castShadow = true;
-  moon.shadow.mapSize.set(1024, 1024);
-  scene.add(moon);
-
-  const redPulse = new THREE.PointLight(0x8b1d2b, 0.6, 24);
-  redPulse.position.set(-17, 2, -16);
-  scene.add(redPulse);
-
-  setInterval(() => {
-    redPulse.intensity = 0.15 + Math.random() * 0.8;
-  }, 180);
+function noiseBurst(duration = 0.3, volume = 0.02) {
+  const sr = audioCtx.sampleRate;
+  const buffer = audioCtx.createBuffer(1, sr * duration, sr);
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / data.length);
+  const src = audioCtx.createBufferSource();
+  src.buffer = buffer;
+  const gain = audioCtx.createGain();
+  gain.gain.value = volume;
+  src.connect(gain);
+  gain.connect(audioCtx.destination);
+  src.start();
 }
 
-function makeWall(x, z, w, h, d) {
-  const mesh = new THREE.Mesh(
-    new THREE.BoxGeometry(w, h, d),
-    new THREE.MeshStandardMaterial({ map: tex.wallTex, roughness: 0.9 })
-  );
+function setObjective(text) { ui.objective.textContent = text; }
+
+function updateHUD() {
+  ui.keys.textContent = `${game.keysFound} / ${game.keysTotal}`;
+  ui.stamina.textContent = `${Math.round(game.stamina)}%`;
+  ui.ammo.textContent = `${game.ammo}`;
+  ui.threat.textContent = ghost.stunned > 0 ? 'Stunned' : ghost.rage ? 'Hunting' : 'Searching';
+}
+
+function addWall(x, z, w, h, d, material) {
+  const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material);
   mesh.position.set(x, h / 2, z);
-  mesh.castShadow = mesh.receiveShadow = true;
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
   scene.add(mesh);
   world.walls.push(new THREE.Box3().setFromObject(mesh));
+  world.props.push(mesh);
 }
 
-function generateMansion() {
-  const floor = new THREE.Mesh(
-    new THREE.PlaneGeometry(54, 54),
-    new THREE.MeshStandardMaterial({ map: tex.floorTex, roughness: 0.88 })
-  );
+function makeBed(x, z, rot = 0) {
+  const g = new THREE.Group();
+  const frame = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.45, 4), new THREE.MeshStandardMaterial({ color: 0x3f2e2e }));
+  const mattress = new THREE.Mesh(new THREE.BoxGeometry(2, 0.4, 3.7), new THREE.MeshStandardMaterial({ color: 0xccc3b8 }));
+  const head = new THREE.Mesh(new THREE.BoxGeometry(2.2, 1.1, 0.2), new THREE.MeshStandardMaterial({ color: 0x2a1a1a }));
+  mattress.position.y = 0.42;
+  head.position.set(0, 0.8, -1.9);
+  g.add(frame, mattress, head);
+  g.position.set(x, 0, z);
+  g.rotation.y = rot;
+  scene.add(g);
+  world.walls.push(new THREE.Box3().setFromObject(g));
+  world.props.push(g);
+}
+
+function makeDrawer(x, z) {
+  const g = new THREE.Group();
+  const shell = new THREE.Mesh(new THREE.BoxGeometry(1.1, 1.2, 0.7), new THREE.MeshStandardMaterial({ color: 0x4d382d }));
+  const h1 = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.25, 0.04), new THREE.MeshStandardMaterial({ color: 0x7c5a4f }));
+  const h2 = h1.clone();
+  const h3 = h1.clone();
+  h1.position.set(0, 0.4, 0.36); h2.position.set(0, 0, 0.36); h3.position.set(0, -0.4, 0.36);
+  g.add(shell, h1, h2, h3);
+  g.position.set(x, 0.6, z);
+  scene.add(g);
+  world.walls.push(new THREE.Box3().setFromObject(g));
+  world.props.push(g);
+}
+
+function makeCloset(x, z) {
+  const g = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.BoxGeometry(1.8, 2.8, 0.9), new THREE.MeshStandardMaterial({ color: 0x2b2626 }));
+  const leftDoor = new THREE.Mesh(new THREE.BoxGeometry(0.85, 2.65, 0.05), new THREE.MeshStandardMaterial({ color: 0x463737 }));
+  const rightDoor = leftDoor.clone();
+  leftDoor.position.set(-0.44, 0, 0.48);
+  rightDoor.position.set(0.44, 0, 0.48);
+  g.add(body, leftDoor, rightDoor);
+  g.position.set(x, 1.4, z);
+  scene.add(g);
+  world.walls.push(new THREE.Box3().setFromObject(g));
+  world.closets.push(g);
+  world.props.push(g);
+}
+
+function makeStairs(x, z, steps = 8, rot = 0) {
+  const group = new THREE.Group();
+  for (let i = 0; i < steps; i++) {
+    const s = new THREE.Mesh(new THREE.BoxGeometry(2.8, 0.23, 0.9), new THREE.MeshStandardMaterial({ color: 0x2e2c35 }));
+    s.position.set(0, i * 0.23, i * 0.85);
+    group.add(s);
+  }
+  group.position.set(x, 0.1, z);
+  group.rotation.y = rot;
+  scene.add(group);
+  world.stairs.push(group);
+  world.walls.push(new THREE.Box3().setFromObject(group));
+  world.props.push(group);
+}
+
+function createKeyMesh() {
+  const g = new THREE.Group();
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(0.18, 0.05, 10, 22), new THREE.MeshStandardMaterial({ color: 0xd4af37, metalness: 0.9, roughness: 0.2 }));
+  const stem = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.45, 0.08), ring.material);
+  stem.position.y = -0.31;
+  const tooth1 = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.08, 0.08), ring.material);
+  const tooth2 = tooth1.clone();
+  tooth1.position.set(0.08, -0.5, 0);
+  tooth2.position.set(-0.02, -0.56, 0);
+  g.add(ring, stem, tooth1, tooth2);
+  return g;
+}
+
+function createGunPickup() {
+  const g = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.12, 0.2), new THREE.MeshStandardMaterial({ color: 0x111827, metalness: 0.8, roughness: 0.3 }));
+  const handle = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.3, 0.16), body.material);
+  handle.position.set(-0.15, -0.16, 0);
+  g.add(body, handle);
+  return g;
+}
+
+function setupWorld() {
+  const floorTex = loader.load('https://threejs.org/examples/textures/hardwood2_diffuse.jpg');
+  floorTex.wrapS = floorTex.wrapT = THREE.RepeatWrapping;
+  floorTex.repeat.set(16, 16);
+  const wallTex = loader.load('https://threejs.org/examples/textures/brick_diffuse.jpg');
+  wallTex.wrapS = wallTex.wrapT = THREE.RepeatWrapping;
+  wallTex.repeat.set(8, 2);
+
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(70, 70), new THREE.MeshStandardMaterial({ map: floorTex, roughness: 0.9 }));
   floor.rotation.x = -Math.PI / 2;
   floor.receiveShadow = true;
   scene.add(floor);
 
-  const ceiling = new THREE.Mesh(
-    new THREE.PlaneGeometry(54, 54),
-    new THREE.MeshStandardMaterial({ map: tex.roofTex, color: 0x333944, roughness: 1 })
-  );
-  ceiling.position.y = 4;
+  const ceiling = new THREE.Mesh(new THREE.PlaneGeometry(70, 70), new THREE.MeshStandardMaterial({ color: 0x111319, roughness: 1 }));
   ceiling.rotation.x = Math.PI / 2;
+  ceiling.position.y = 5;
   scene.add(ceiling);
 
-  makeWall(0, -27, 54, 4, 1);
-  makeWall(0, 27, 54, 4, 1);
-  makeWall(-27, 0, 1, 4, 54);
-  makeWall(27, 0, 1, 4, 54);
+  const wallMat = new THREE.MeshStandardMaterial({ map: wallTex, roughness: 0.95 });
+  addWall(0, -35, 70, 5, 1, wallMat); addWall(0, 35, 70, 5, 1, wallMat);
+  addWall(-35, 0, 1, 5, 70, wallMat); addWall(35, 0, 1, 5, 70, wallMat);
 
-  const lines = [
-    [-14, 0, 1, 4, 38], [14, 0, 1, 4, 38], [0, -9, 28, 4, 1], [0, 9, 28, 4, 1],
-    [-7, 18, 14, 4, 1], [7, -18, 14, 4, 1], [-20, -9, 1, 4, 16], [20, 9, 1, 4, 16]
+  const partitions = [
+    [-20, 0, 1, 5, 48], [20, 0, 1, 5, 48], [0, -14, 40, 5, 1], [0, 14, 40, 5, 1],
+    [-10, 24, 18, 5, 1], [10, -24, 18, 5, 1], [27, 16, 1, 5, 16], [-27, -16, 1, 5, 16]
   ];
-  for (const [x, z, w, h, d] of lines) makeWall(x, z, w, h, d);
+  for (const [x, z, w, h, d] of partitions) addWall(x, z, w, h, d, wallMat);
 
-  const gate = new THREE.Mesh(
-    new THREE.BoxGeometry(6, 3, 0.6),
-    new THREE.MeshStandardMaterial({ color: 0x334155, metalness: 0.9, roughness: 0.4 })
-  );
-  gate.position.set(0, 1.5, -26.2);
+  // hidden room and door gap
+  addWall(24, 28, 14, 5, 1, wallMat);
+  addWall(24, 18, 14, 5, 1, wallMat);
+
+  makeBed(-28, 28); makeBed(28, -27, Math.PI / 2); makeBed(-8, -20); makeBed(8, 22, Math.PI / 2);
+  makeCloset(-30, 6); makeCloset(30, -8); makeCloset(-4, 30); makeCloset(3, -30);
+  makeDrawer(-18, -6); makeDrawer(12, 10); makeDrawer(28, 22); makeDrawer(-26, -24);
+  makeStairs(-32, -32, 8, Math.PI / 4);
+
+  const gate = new THREE.Mesh(new THREE.BoxGeometry(6, 3.2, 0.7), new THREE.MeshStandardMaterial({ color: 0x334155, metalness: 0.9 }));
+  gate.position.set(0, 1.6, -34.2);
   gate.name = 'exitGate';
-  gate.castShadow = true;
   scene.add(gate);
   world.props.push(gate);
 
-  for (let i = 0; i < 24; i++) {
-    const box = new THREE.Mesh(
-      new THREE.BoxGeometry(2, 1.2 + Math.random() * 1.8, 2),
-      new THREE.MeshStandardMaterial({ color: 0x201f29, roughness: 0.95 })
-    );
-    box.position.set((Math.random() - 0.5) * 44, box.geometry.parameters.height / 2, (Math.random() - 0.5) * 44);
-    box.castShadow = box.receiveShadow = true;
-    scene.add(box);
-    world.walls.push(new THREE.Box3().setFromObject(box));
-    world.props.push(box);
+  scene.add(new THREE.HemisphereLight(0x4c5f77, 0x0f0d0a, 0.18));
+  const moon = new THREE.DirectionalLight(0x91a8d9, 0.35);
+  moon.position.set(20, 24, -11);
+  moon.castShadow = true;
+  scene.add(moon);
+
+  for (let i = 0; i < 14; i++) {
+    const lamp = new THREE.PointLight(i % 2 ? 0x7f1d1d : 0x475569, 0.5, 16);
+    lamp.position.set((Math.random() - 0.5) * 56, 3, (Math.random() - 0.5) * 56);
+    scene.add(lamp);
   }
 }
 
-function spawnKeys() {
-  const positions = [
-    new THREE.Vector3(-20, 0.55, 19),
-    new THREE.Vector3(19, 0.55, 15),
-    new THREE.Vector3(-15, 0.55, -19)
-  ];
+function spawnItems() {
+  const candidate = [
+    new THREE.Vector3(-26, 0.9, 25), new THREE.Vector3(28, 0.9, -25), new THREE.Vector3(-2, 0.9, -10),
+    new THREE.Vector3(7, 0.9, 26), new THREE.Vector3(-26, 0.9, -2), new THREE.Vector3(23, 0.9, 20),
+    new THREE.Vector3(-10, 0.9, 10), new THREE.Vector3(17, 0.9, -8)
+  ].sort(() => Math.random() - 0.5);
 
-  for (let i = 0; i < game.totalKeys; i++) {
-    const relic = new THREE.Mesh(
-      new THREE.TorusKnotGeometry(0.33, 0.08, 90, 14),
-      new THREE.MeshStandardMaterial({ color: 0x60a5fa, emissive: 0x1d4ed8, emissiveIntensity: 0.8 })
-    );
-    relic.position.copy(positions[i]);
-    relic.userData.collected = false;
-    scene.add(relic);
-    world.keys.push(relic);
+  for (let i = 0; i < game.keysTotal; i++) {
+    const key = createKeyMesh();
+    key.position.copy(candidate[i]);
+    key.userData.collected = false;
+    scene.add(key);
+    world.keys.push(key);
+  }
+
+  for (let i = 0; i < 4; i++) {
+    const ammo = createGunPickup();
+    ammo.position.copy(candidate[i + 3]);
+    ammo.userData.collected = false;
+    scene.add(ammo);
+    world.ammoPickups.push(ammo);
   }
 }
 
-function spawnGhost() {
-  const mat = new THREE.MeshStandardMaterial({ color: 0xe2e8f0, transparent: true, opacity: 0.9, emissive: 0x111827 });
-  const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.45, 1.7, 6, 12), mat);
-  body.position.copy(ghost.pos);
-  body.castShadow = true;
-  scene.add(body);
-  ghost.mesh = body;
+function buildScaryGhost() {
+  const g = new THREE.Group();
+  const skin = new THREE.MeshStandardMaterial({ color: 0xd9d3d0, roughness: 0.92 });
+  const blood = new THREE.MeshStandardMaterial({ color: 0x5b0715, roughness: 0.55, metalness: 0.2 });
+
+  const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.45, 1.4, 6, 10), skin);
+  torso.position.y = 1.4;
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.35, 18, 18), skin);
+  head.position.y = 2.35;
+
+  const armL = new THREE.Mesh(new THREE.CapsuleGeometry(0.12, 0.85), skin);
+  const armR = armL.clone();
+  armL.position.set(-0.52, 1.4, 0); armR.position.set(0.52, 1.4, 0);
+
+  const legL = new THREE.Mesh(new THREE.CapsuleGeometry(0.14, 0.92), skin);
+  const legR = legL.clone();
+  legL.position.set(-0.2, 0.58, 0); legR.position.set(0.2, 0.58, 0);
+
+  const tooth1 = new THREE.Mesh(new THREE.ConeGeometry(0.045, 0.18, 6), new THREE.MeshStandardMaterial({ color: 0xf8fafc }));
+  const tooth2 = tooth1.clone();
+  tooth1.position.set(-0.06, 2.07, 0.27); tooth2.position.set(0.06, 2.07, 0.27);
+
+  const bloodStripe = new THREE.Mesh(new THREE.BoxGeometry(0.22, 1.15, 0.07), blood);
+  bloodStripe.position.set(0.1, 1.65, 0.34);
+
+  g.add(torso, head, armL, armR, legL, legR, tooth1, tooth2, bloodStripe);
+  g.position.copy(ghost.pos);
+  scene.add(g);
+  ghost.root = g;
 }
 
-function synthSound(freq, length, type = 'sine', gain = 0.08) {
-  const audioCtx = listener.context;
-  const osc = audioCtx.createOscillator();
-  const vol = audioCtx.createGain();
-  osc.type = type;
-  osc.frequency.value = freq;
-  vol.gain.value = gain;
-  osc.connect(vol);
-  vol.connect(audioCtx.destination);
-  osc.start();
-  osc.stop(audioCtx.currentTime + length);
-}
-
-function ambienceLoop() {
-  setInterval(() => {
-    if (!game.started || game.over || game.won) return;
-    synthSound(45 + Math.random() * 20, 1.8, 'sawtooth', 0.025);
-    if (Math.random() > 0.6) synthSound(180 + Math.random() * 80, 0.15, 'triangle', 0.03);
-  }, 1400);
-}
-
-function padInput(element, onMove, onEnd) {
-  let id = null;
-  let origin = null;
-  element.addEventListener('touchstart', (e) => {
-    const t = e.changedTouches[0];
-    id = t.identifier;
-    origin = { x: t.clientX, y: t.clientY };
-  }, { passive: false });
-
-  element.addEventListener('touchmove', (e) => {
-    for (const t of e.changedTouches) {
-      if (t.identifier !== id) continue;
-      e.preventDefault();
-      const dx = t.clientX - origin.x;
-      const dy = t.clientY - origin.y;
-      onMove(dx, dy);
-    }
-  }, { passive: false });
-
-  const endFn = () => {
-    id = null;
-    onEnd();
-  };
-  element.addEventListener('touchend', endFn);
-  element.addEventListener('touchcancel', endFn);
+function worldCollision(nextPos) {
+  const pBox = new THREE.Box3(new THREE.Vector3(nextPos.x - 0.33, 0.1, nextPos.z - 0.33), new THREE.Vector3(nextPos.x + 0.33, 1.75, nextPos.z + 0.33));
+  for (const w of world.walls) if (w.intersectsBox(pBox)) return true;
+  return false;
 }
 
 function setupControls() {
-  padInput(document.getElementById('movePad'), (dx, dy) => {
-    player.moveVec.set(
-      Math.max(-1, Math.min(1, dx / 46)),
-      Math.max(-1, Math.min(1, dy / 46))
-    );
-  }, () => player.moveVec.set(0, 0));
+  const joystick = document.getElementById('joystick');
+  const stick = document.getElementById('stick');
+  const lookZone = document.getElementById('lookZone');
 
-  padInput(document.getElementById('lookPad'), (dx, dy) => {
+  let joyId = null;
+  let joyOrigin = null;
+
+  joystick.addEventListener('touchstart', (e) => {
+    const t = e.changedTouches[0];
+    joyId = t.identifier;
+    const r = joystick.getBoundingClientRect();
+    joyOrigin = { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+  }, { passive: true });
+
+  joystick.addEventListener('touchmove', (e) => {
+    for (const t of e.changedTouches) {
+      if (t.identifier !== joyId) continue;
+      const dx = t.clientX - joyOrigin.x;
+      const dy = t.clientY - joyOrigin.y;
+      const len = Math.min(48, Math.hypot(dx, dy));
+      const ang = Math.atan2(dy, dx);
+      const sx = Math.cos(ang) * len;
+      const sy = Math.sin(ang) * len;
+      stick.style.transform = `translate(calc(-50% + ${sx}px), calc(-50% + ${sy}px))`;
+      player.move.set(sx / 48, sy / 48);
+    }
+  }, { passive: false });
+
+  const releaseJoy = () => {
+    joyId = null;
+    player.move.set(0, 0);
+    stick.style.transform = 'translate(-50%, -50%)';
+  };
+  joystick.addEventListener('touchend', releaseJoy);
+  joystick.addEventListener('touchcancel', releaseJoy);
+
+  let lookId = null;
+  let lastLook = null;
+  const doLook = (dx, dy) => {
     player.yaw -= dx * 0.003;
-    player.pitch -= dy * 0.002;
-    player.pitch = Math.max(-1.1, Math.min(1.1, player.pitch));
-  }, () => {});
+    player.pitch -= dy * 0.0022;
+    player.pitch = THREE.MathUtils.clamp(player.pitch, -1.2, 1.2);
+  };
+
+  lookZone.addEventListener('touchstart', (e) => {
+    const t = e.changedTouches[0];
+    lookId = t.identifier;
+    lastLook = { x: t.clientX, y: t.clientY };
+  }, { passive: true });
+
+  lookZone.addEventListener('touchmove', (e) => {
+    for (const t of e.changedTouches) {
+      if (t.identifier !== lookId || !lastLook) continue;
+      e.preventDefault();
+      const dx = t.clientX - lastLook.x;
+      const dy = t.clientY - lastLook.y;
+      doLook(dx, dy);
+      lastLook = { x: t.clientX, y: t.clientY };
+    }
+  }, { passive: false });
+  lookZone.addEventListener('touchend', () => { lookId = null; lastLook = null; });
+
+  // desktop free-look
+  renderer.domElement.addEventListener('click', () => {
+    if (!game.started || game.over || game.won) return;
+    renderer.domElement.requestPointerLock?.();
+  });
+  document.addEventListener('mousemove', (e) => {
+    if (document.pointerLockElement === renderer.domElement) doLook(e.movementX, e.movementY);
+  });
 
   const runBtn = document.getElementById('runBtn');
   runBtn.addEventListener('touchstart', () => game.running = true);
   runBtn.addEventListener('touchend', () => game.running = false);
 
-  const hideBtn = document.getElementById('hideBtn');
-  hideBtn.addEventListener('touchstart', () => {
-    game.hiding = !game.hiding;
-    hideBtn.style.background = game.hiding ? 'rgba(34,197,94,.45)' : 'rgba(255,255,255,.16)';
-    camera.position.y = game.hiding ? 1.0 : 1.7;
+  const crouchBtn = document.getElementById('crouchBtn');
+  crouchBtn.addEventListener('touchstart', () => {
+    game.crouching = !game.crouching;
+    crouchBtn.style.background = game.crouching ? 'rgba(31,160,94,.5)' : 'rgba(255,255,255,.14)';
+    camera.position.y = game.crouching ? 1.0 : 1.7;
   });
+
+  const fireBtn = document.getElementById('fireBtn');
+  const fire = () => {
+    if (!game.started || game.over || game.won || game.ammo <= 0) return;
+    game.ammo -= 1;
+    tone(760, 0.13, 'square', 0.06, -200);
+    noiseBurst(0.08, 0.015);
+
+    const fwd = new THREE.Vector3(Math.sin(player.yaw), 0, Math.cos(player.yaw)).normalize();
+    const toGhost = ghost.pos.clone().sub(player.pos);
+    const dist = toGhost.length();
+    if (dist < 16 && fwd.dot(toGhost.normalize()) > 0.93) {
+      ghost.stunned = 3.8;
+      ghost.rage = false;
+      tone(140, 0.35, 'sawtooth', 0.06, -40);
+    }
+  };
+  fireBtn.addEventListener('touchstart', fire);
+  window.addEventListener('keydown', (e) => { if (e.code === 'Space') fire(); });
 }
 
-function setObjective(text) {
-  ui.objective.textContent = text;
+function inClosetCover() {
+  for (const c of world.closets) {
+    if (c.position.distanceTo(player.pos) < 2.2) return true;
+  }
+  return false;
 }
 
-function updateHUD() {
-  ui.keys.textContent = `${game.keysFound} / ${game.totalKeys}`;
-  ui.stamina.textContent = `${Math.round(game.stamina)}%`;
-  ui.threat.textContent = ghost.rage ? 'Hunting' : 'Searching';
+function ambientAndThreatSounds(dt) {
+  if (!game.started || game.over || game.won) return;
+  ghost.howlTimer -= dt;
+  const d = ghost.pos.distanceTo(player.pos);
+  if (ghost.howlTimer <= 0) {
+    tone(45 + Math.random() * 10, 1.7, 'sawtooth', 0.02, Math.random() * 15);
+    if (d < 12) {
+      tone(260 + Math.random() * 90, 0.25, 'triangle', 0.028, -30);
+      noiseBurst(0.2, 0.02);
+    }
+    if (ghost.rage && d < 9) tone(90, 0.2, 'square', 0.035, -30);
+    ghost.howlTimer = 0.85 + Math.random() * 0.6;
+  }
 }
 
-function tryCollectKeys() {
-  for (const key of world.keys) {
-    if (key.userData.collected) continue;
-    key.rotation.y += 0.03;
-    const d = key.position.distanceTo(player.pos);
-    if (d < 1.45) {
-      key.userData.collected = true;
-      key.visible = false;
+function updateItems() {
+  for (const k of world.keys) {
+    if (k.userData.collected) continue;
+    k.rotation.y += 0.04;
+    if (k.position.distanceTo(player.pos) < 1.4) {
+      k.userData.collected = true;
+      k.visible = false;
       game.keysFound += 1;
-      synthSound(780, 0.12, 'square', 0.08);
-      if (game.keysFound === game.totalKeys) {
+      tone(980, 0.15, 'triangle', 0.06, 120);
+      if (game.keysFound >= game.keysTotal) {
         game.gateUnlocked = true;
-        setObjective('Gate unlocked! Reach the basement exit.');
+        setObjective('Gate unlocked. Reach basement exit.');
         const gate = world.props.find((p) => p.name === 'exitGate');
-        if (gate) gate.material.color.set(0x16a34a);
+        if (gate) gate.material.color.set(0x1fa05e);
       }
-      updateHUD();
+    }
+  }
+
+  for (const a of world.ammoPickups) {
+    if (a.userData.collected) continue;
+    a.rotation.y += 0.03;
+    if (a.position.distanceTo(player.pos) < 1.5) {
+      a.userData.collected = true;
+      a.visible = false;
+      game.ammo += 3;
+      tone(620, 0.12, 'square', 0.05, 60);
     }
   }
 }
 
-function lineBlocked(from, to) {
-  const ray = new THREE.Raycaster(from, to.clone().sub(from).normalize(), 0, from.distanceTo(to));
-  const hits = ray.intersectObjects(world.props);
-  return hits.length > 0;
-}
-
-function updateGhost(dt) {
-  if (!ghost.mesh || game.over || game.won) return;
-
-  const toPlayer = player.pos.clone().sub(ghost.pos);
-  const dist = toPlayer.length();
-  const canSee = dist < 14 && !lineBlocked(ghost.pos, player.pos) && !game.hiding;
-
-  if (canSee) {
-    ghost.rage = true;
-    game.ghostAwareness = Math.min(100, game.ghostAwareness + dt * 35);
-    ghost.cooldown = 4;
-  } else {
-    ghost.cooldown -= dt;
-    if (ghost.cooldown <= 0) ghost.rage = false;
-    game.ghostAwareness = Math.max(0, game.ghostAwareness - dt * 12);
-  }
-
-  const speed = ghost.rage ? ghost.rageSpeed : ghost.speed;
-  if (dist > 1.2) {
-    toPlayer.normalize();
-    ghost.pos.addScaledVector(toPlayer, speed * dt);
-  }
-
-  ghost.pos.x = THREE.MathUtils.clamp(ghost.pos.x, world.houseMin.x + 1, world.houseMax.x - 1);
-  ghost.pos.z = THREE.MathUtils.clamp(ghost.pos.z, world.houseMin.z + 1, world.houseMax.z - 1);
-
-  ghost.mesh.position.copy(ghost.pos);
-  ghost.mesh.position.y = 0.8 + Math.sin(performance.now() * 0.005) * 0.15;
-  ghost.mesh.lookAt(player.pos.x, ghost.mesh.position.y, player.pos.z);
-
-  if (dist < 1.5) triggerDeath();
-}
-
-function movePlayer(dt) {
-  const dir = new THREE.Vector3();
+function updatePlayer(dt) {
   const forward = new THREE.Vector3(Math.sin(player.yaw), 0, Math.cos(player.yaw));
   const right = new THREE.Vector3(forward.z, 0, -forward.x);
+  const moveDir = new THREE.Vector3().addScaledVector(forward, -player.move.y).addScaledVector(right, player.move.x);
+  if (moveDir.lengthSq() > 0.001) moveDir.normalize();
 
-  dir.addScaledVector(forward, -player.moveVec.y);
-  dir.addScaledVector(right, player.moveVec.x);
-  if (dir.lengthSq() > 0) dir.normalize();
-
-  let speed = game.speed;
-  if (game.running && game.stamina > 0 && dir.lengthSq() > 0.01 && !game.hiding) {
-    speed = game.runSpeed;
-    game.stamina = Math.max(0, game.stamina - 24 * dt);
+  let speed = game.crouching ? 1.2 : 2.1;
+  if (game.running && game.stamina > 0 && !game.crouching && moveDir.lengthSq() > 0.01) {
+    speed = 4.0;
+    game.stamina = Math.max(0, game.stamina - dt * 24);
   } else {
-    game.stamina = Math.min(100, game.stamina + 12 * dt);
+    game.stamina = Math.min(100, game.stamina + dt * 13);
   }
 
-  const old = player.pos.clone();
-  player.pos.addScaledVector(dir, speed * dt);
-  player.pos.x = THREE.MathUtils.clamp(player.pos.x, world.houseMin.x + 1.2, world.houseMax.x - 1.2);
-  player.pos.z = THREE.MathUtils.clamp(player.pos.z, world.houseMin.z + 1.2, world.houseMax.z - 1.2);
-
-  const playerBox = new THREE.Box3(
-    new THREE.Vector3(player.pos.x - 0.35, 0, player.pos.z - 0.35),
-    new THREE.Vector3(player.pos.x + 0.35, 1.8, player.pos.z + 0.35)
-  );
-  for (const wall of world.walls) {
-    if (wall.intersectsBox(playerBox)) {
-      player.pos.copy(old);
-      break;
-    }
-  }
+  const candidate = player.pos.clone().addScaledVector(moveDir, speed * dt);
+  candidate.x = THREE.MathUtils.clamp(candidate.x, world.boundsMin.x + 1.2, world.boundsMax.x - 1.2);
+  candidate.z = THREE.MathUtils.clamp(candidate.z, world.boundsMin.z + 1.2, world.boundsMax.z - 1.2);
+  if (!worldCollision(candidate)) player.pos.copy(candidate);
 
   camera.position.copy(player.pos);
   camera.rotation.order = 'YXZ';
@@ -380,76 +504,142 @@ function movePlayer(dt) {
   camera.rotation.x = player.pitch;
 }
 
-function checkWinCondition() {
-  if (!game.gateUnlocked) return;
-  if (player.pos.distanceTo(new THREE.Vector3(0, 1.7, -24.6)) < 2.4) {
-    game.won = true;
-    ui.win.classList.add('visible');
-    synthSound(1200, 0.22, 'sine', 0.09);
+function hasLineOfSight(from, to) {
+  const ray = new THREE.Raycaster(from, to.clone().sub(from).normalize(), 0, from.distanceTo(to));
+  const hits = ray.intersectObjects(world.props);
+  return hits.length === 0;
+}
+
+function updateGhost(dt) {
+  if (!ghost.root || game.over || game.won) return;
+
+  if (ghost.stunned > 0) {
+    ghost.stunned -= dt;
+    ghost.root.rotation.z = Math.sin(performance.now() * 0.02) * 0.12;
+    return;
+  }
+
+  const toPlayer = player.pos.clone().sub(ghost.pos);
+  const dist = toPlayer.length();
+  const visible = dist < 17 && hasLineOfSight(ghost.pos, player.pos) && !(game.crouching && inClosetCover());
+
+  if (visible) {
+    ghost.rage = true;
+    ghost.cooldown = 5;
+  } else {
+    ghost.cooldown -= dt;
+    if (ghost.cooldown <= 0) ghost.rage = false;
+  }
+
+  const stepSpeed = ghost.rage ? ghost.rageSpeed : ghost.speed;
+  if (dist > 1.35) {
+    ghost.pos.addScaledVector(toPlayer.normalize(), stepSpeed * dt);
+  }
+
+  ghost.pos.x = THREE.MathUtils.clamp(ghost.pos.x, world.boundsMin.x + 1.2, world.boundsMax.x - 1.2);
+  ghost.pos.z = THREE.MathUtils.clamp(ghost.pos.z, world.boundsMin.z + 1.2, world.boundsMax.z - 1.2);
+
+  ghost.footPhase += dt * (ghost.rage ? 9 : 6);
+  const swing = Math.sin(ghost.footPhase) * 0.24;
+  ghost.root.children[2].rotation.x = swing;
+  ghost.root.children[3].rotation.x = -swing;
+  ghost.root.children[4].rotation.x = -swing;
+  ghost.root.children[5].rotation.x = swing;
+
+  ghost.root.position.copy(ghost.pos);
+  ghost.root.lookAt(player.pos.x, ghost.pos.y + 1, player.pos.z);
+
+  if (dist < 1.45) {
+    game.over = true;
+    ui.deathOverlay.classList.add('visible');
+    let t = 0;
+    const killAnim = () => {
+      if (!game.over) return;
+      t += 0.05;
+      camera.fov = THREE.MathUtils.lerp(72, 125, t);
+      camera.updateProjectionMatrix();
+      if (t < 1) requestAnimationFrame(killAnim);
+    };
+    killAnim();
+    tone(85, 0.45, 'sawtooth', 0.08, -20);
+    noiseBurst(0.35, 0.03);
   }
 }
 
-function triggerDeath() {
-  if (game.over || game.won) return;
-  game.over = true;
-  ui.death.classList.add('visible');
-
-  // quick kill animation
-  const start = performance.now();
-  const killZoom = () => {
-    const t = (performance.now() - start) / 700;
-    camera.fov = THREE.MathUtils.lerp(70, 125, Math.min(1, t));
-    camera.updateProjectionMatrix();
-    if (t < 1) requestAnimationFrame(killZoom);
-  };
-  killZoom();
-  synthSound(90, 0.4, 'sawtooth', 0.11);
+function checkWin() {
+  if (!game.gateUnlocked) return;
+  if (player.pos.distanceTo(new THREE.Vector3(0, 1.7, -33)) < 2.2) {
+    game.won = true;
+    ui.winOverlay.classList.add('visible');
+    tone(1180, 0.2, 'triangle', 0.08, 80);
+  }
 }
 
 function animate() {
   requestAnimationFrame(animate);
-  const dt = Math.min(0.033, clock.getDelta());
+  const dt = Math.min(clock.getDelta(), 0.033);
 
   if (game.started && !game.over && !game.won) {
-    movePlayer(dt);
+    updatePlayer(dt);
     updateGhost(dt);
-    tryCollectKeys();
-    checkWinCondition();
+    updateItems();
+    ambientAndThreatSounds(dt);
+    checkWin();
     updateHUD();
   }
 
   renderer.render(scene, camera);
 }
 
-function hardReset() {
-  window.location.reload();
+function simulateLoadAndStartMenu() {
+  const hints = ['Waking the house...', 'Lighting ritual candles...', 'Sharpening the hunter teeth...', 'Loading blood corridors...'];
+  let p = 0;
+  let i = 0;
+  const timer = setInterval(() => {
+    p += 8 + Math.random() * 9;
+    ui.loadingFill.style.width = `${Math.min(100, p)}%`;
+    ui.loadingHint.textContent = hints[i % hints.length];
+    i++;
+    tone(140 + Math.random() * 40, 0.08, 'triangle', 0.01);
+    if (p >= 100) {
+      clearInterval(timer);
+      game.loadingDone = true;
+      setTimeout(() => {
+        ui.loadingOverlay.classList.remove('visible');
+        ui.startOverlay.classList.add('visible');
+        noiseBurst(0.25, 0.015);
+      }, 500);
+    }
+  }, 260);
 }
 
 function init() {
-  setupLighting();
-  generateMansion();
-  spawnKeys();
-  spawnGhost();
+  setupWorld();
+  spawnItems();
+  buildScaryGhost();
   setupControls();
-  updateHUD();
   setObjective('Find 3 relic keys');
-  ambienceLoop();
+  updateHUD();
+  animate();
+  simulateLoadAndStartMenu();
 
-  document.getElementById('startBtn').addEventListener('click', () => {
-    ui.start.classList.remove('visible');
+  document.getElementById('startBtn').addEventListener('click', async () => {
+    if (!game.loadingDone) return;
+    if (audioCtx.state !== 'running') await audioCtx.resume();
+    ui.startOverlay.classList.remove('visible');
     game.started = true;
-    synthSound(280, 0.2, 'triangle', 0.04);
+    tone(250, 0.25, 'sawtooth', 0.03, -20);
   });
-  document.getElementById('retryBtn').addEventListener('click', hardReset);
-  document.getElementById('playAgainBtn').addEventListener('click', hardReset);
+
+  const restart = () => window.location.reload();
+  document.getElementById('retryBtn').addEventListener('click', restart);
+  document.getElementById('playAgainBtn').addEventListener('click', restart);
 
   window.addEventListener('resize', () => {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
   });
-
-  animate();
 }
 
 init();
