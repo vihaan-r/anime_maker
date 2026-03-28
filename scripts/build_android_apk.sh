@@ -40,6 +40,26 @@ fi
 
 npx cap sync android
 
+# Patch Gradle dependency resolution to avoid duplicate Kotlin stdlib classes in CI.
+ROOT_GRADLE_FILE="android/build.gradle"
+KOTLIN_FIX_MARKER="// PHANTOM_LOCKDOWN_KOTLIN_FIX"
+if [ -f "$ROOT_GRADLE_FILE" ] && ! grep -q "$KOTLIN_FIX_MARKER" "$ROOT_GRADLE_FILE"; then
+  cat >> "$ROOT_GRADLE_FILE" <<'GRADLE_FIX'
+
+// PHANTOM_LOCKDOWN_KOTLIN_FIX
+subprojects {
+    configurations.all {
+        exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib-jdk7'
+        exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib-jdk8'
+        resolutionStrategy {
+            force 'org.jetbrains.kotlin:kotlin-stdlib:1.8.22'
+            force 'org.jetbrains.kotlin:kotlin-stdlib-common:1.8.22'
+        }
+    }
+}
+GRADLE_FIX
+fi
+
 if [ -x android/gradlew ]; then
   (
     cd android

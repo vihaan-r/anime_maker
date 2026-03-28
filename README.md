@@ -120,6 +120,7 @@ Do these checks:
 
 Common fixes:
 
+- If you get Kotlin duplicate class errors (for `kotlin-stdlib-jdk7/jdk8`), remove `kotlin-stdlib-jdk7/jdk8` and force one Kotlin stdlib version (the build script now patches this automatically).
 - If Gradle says `invalid source release: 21`, use JDK 21 (not 17). In GitHub Actions, set `java-version: '21'`.
 - If you get `"." is not a valid value for webDir`, set `webDir` to `www` (not `.`) and copy files into `www` before `npx cap sync android`.
 - Ensure `ANDROID_HOME` is set and SDK tools are installed.
