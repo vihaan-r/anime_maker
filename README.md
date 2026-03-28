@@ -15,6 +15,7 @@ For the full production-grade design and build roadmap, see `WHISPERING_SHADOWS_
 - Expanded map props: closets, beds, drawers, stairs, hidden-room layout.
 - Gun/ammo pickups and ghost stun mechanic.
 - Randomized key spawn points with key-shaped 3D pickups.
+- Procedural textures generated at runtime from scratch (no external texture downloads).
 
 ## What is already built
 

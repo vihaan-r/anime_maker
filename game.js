@@ -89,7 +89,69 @@ const world = {
 };
 
 const clock = new THREE.Clock();
-const loader = new THREE.TextureLoader();
+
+function makeCanvasTexture(size, paint) {
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  paint(ctx, size);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.needsUpdate = true;
+  return tex;
+}
+
+function createProceduralTextures() {
+  const floorTex = makeCanvasTexture(512, (ctx, s) => {
+    ctx.fillStyle = '#2f261f';
+    ctx.fillRect(0, 0, s, s);
+    for (let y = 0; y < s; y += 32) {
+      const jitter = (Math.random() * 4) | 0;
+      ctx.fillStyle = y % 64 === 0 ? '#3b3028' : '#342a23';
+      ctx.fillRect(0, y, s, 30 + jitter);
+      ctx.strokeStyle = 'rgba(20,12,8,0.35)';
+      ctx.strokeRect(0, y, s, 30 + jitter);
+    }
+    for (let i = 0; i < 2400; i++) {
+      ctx.fillStyle = `rgba(0,0,0,${Math.random() * 0.08})`;
+      ctx.fillRect(Math.random() * s, Math.random() * s, 1, 1);
+    }
+  });
+  floorTex.repeat.set(16, 16);
+
+  const wallTex = makeCanvasTexture(512, (ctx, s) => {
+    ctx.fillStyle = '#2b2a31';
+    ctx.fillRect(0, 0, s, s);
+    const brickW = 64;
+    const brickH = 28;
+    for (let y = 0; y < s; y += brickH) {
+      for (let x = 0; x < s; x += brickW) {
+        const ox = (Math.floor(y / brickH) % 2) * (brickW / 2);
+        const bx = x + ox;
+        const shade = 45 + ((x + y) % 40);
+        ctx.fillStyle = `rgb(${shade},${shade-8},${shade+4})`;
+        ctx.fillRect(bx + 2, y + 2, brickW - 4, brickH - 4);
+      }
+    }
+    ctx.strokeStyle = 'rgba(12,12,16,0.5)';
+    for (let y = 0; y < s; y += brickH) ctx.strokeRect(0, y, s, brickH);
+  });
+  wallTex.repeat.set(10, 3);
+
+  const ceilingTex = makeCanvasTexture(256, (ctx, s) => {
+    ctx.fillStyle = '#10141c';
+    ctx.fillRect(0, 0, s, s);
+    for (let i = 0; i < 1800; i++) {
+      const c = 20 + ((Math.random() * 30) | 0);
+      ctx.fillStyle = `rgb(${c},${c},${c + 8})`;
+      ctx.fillRect(Math.random() * s, Math.random() * s, 1, 1);
+    }
+  });
+  ceilingTex.repeat.set(8, 8);
+
+  return { floorTex, wallTex, ceilingTex };
+}
+
 
 function tone(freq, duration, type = 'sine', volume = 0.07, glide = 0) {
   const osc = audioCtx.createOscillator();
@@ -229,24 +291,19 @@ function createGunPickup() {
 }
 
 function setupWorld() {
-  const floorTex = loader.load('https://threejs.org/examples/textures/hardwood2_diffuse.jpg');
-  floorTex.wrapS = floorTex.wrapT = THREE.RepeatWrapping;
-  floorTex.repeat.set(16, 16);
-  const wallTex = loader.load('https://threejs.org/examples/textures/brick_diffuse.jpg');
-  wallTex.wrapS = wallTex.wrapT = THREE.RepeatWrapping;
-  wallTex.repeat.set(8, 2);
+  const tex = createProceduralTextures();
 
-  const floor = new THREE.Mesh(new THREE.PlaneGeometry(70, 70), new THREE.MeshStandardMaterial({ map: floorTex, roughness: 0.9 }));
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(70, 70), new THREE.MeshStandardMaterial({ map: tex.floorTex, roughness: 0.9 }));
   floor.rotation.x = -Math.PI / 2;
   floor.receiveShadow = true;
   scene.add(floor);
 
-  const ceiling = new THREE.Mesh(new THREE.PlaneGeometry(70, 70), new THREE.MeshStandardMaterial({ color: 0x111319, roughness: 1 }));
+  const ceiling = new THREE.Mesh(new THREE.PlaneGeometry(70, 70), new THREE.MeshStandardMaterial({ map: tex.ceilingTex, roughness: 1 }));
   ceiling.rotation.x = Math.PI / 2;
   ceiling.position.y = 5;
   scene.add(ceiling);
 
-  const wallMat = new THREE.MeshStandardMaterial({ map: wallTex, roughness: 0.95 });
+  const wallMat = new THREE.MeshStandardMaterial({ map: tex.wallTex, roughness: 0.95 });
   addWall(0, -35, 70, 5, 1, wallMat); addWall(0, 35, 70, 5, 1, wallMat);
   addWall(-35, 0, 1, 5, 70, wallMat); addWall(35, 0, 1, 5, 70, wallMat);
 
