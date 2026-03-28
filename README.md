@@ -1,20 +1,121 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# Phantom Lockdown (Mobile Horror Escape Prototype)
 
-# Run and deploy your AI Studio app
+This repository contains a **3D mobile horror escape game prototype** inspired by tense house-survival gameplay loops.
 
-This contains everything you need to run your app locally.
+## What is already built
 
-View your app in AI Studio: https://ai.studio/apps/drive/1rj-_y-GIqEmDVeuJwDlEco9Cb3K8XPP9
+- Full-screen 3D environment with textured floors/walls/ceiling.
+- Large mansion map with corridors, rooms, obstacles, and an exit gate.
+- Touch-first controls for mobile (move joystick, look pad, run/hide buttons).
+- Horror loop: collect 3 relic keys, unlock gate, avoid a roaming ghost AI, escape.
+- UI overlays (intro/start sequence, HUD objectives, death and victory screens).
+- Kill animation and dynamic ambient/feedback sound synthesis.
 
-## Run Locally
+## Run locally
 
-**Prerequisites:**  Node.js
+```bash
+python3 -m http.server 4173
+```
+
+Open: `http://localhost:4173`
+
+---
+
+## How to get your Android APK (exact steps)
 
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+## I just want the APK file (simple)
+
+I understand — here is the shortest path:
+
+1. Push this repo to GitHub.
+2. Open **Actions** tab.
+3. Run workflow: **Build Android APK**.
+4. Wait for it to finish.
+5. Download artifact: **phantom-lockdown-debug-apk**.
+6. The file inside is your APK: `app-debug.apk`.
+
+> Note: I cannot directly attach binary files in this chat, so the workflow above is the easiest "one-click" APK download path.
+
+---
+
+### Fastest method (scripted)
+
+From the repo root:
+
+```bash
+./scripts/build_android_apk.sh
+```
+
+If your Android SDK is configured correctly, your debug APK will be created at:
+
+```text
+android/app/build/outputs/apk/debug/app-debug.apk
+```
+
+### Manual method
+
+1. Install:
+   - Node.js (20+ recommended)
+   - Android Studio (with Android SDK + platform tools)
+2. Install Capacitor packages:
+
+```bash
+npm init -y
+npm i -D @capacitor/core @capacitor/cli @capacitor/android
+```
+
+3. Initialize Capacitor (one-time):
+
+```bash
+npx cap init "Phantom Lockdown" "com.phantom.lockdown" --web-dir .
+```
+
+4. Add Android platform (one-time):
+
+```bash
+npx cap add android
+```
+
+5. Sync web assets into Android project:
+
+```bash
+npx cap sync android
+```
+
+6. Build APK using Gradle:
+
+```bash
+cd android
+./gradlew assembleDebug
+```
+
+7. APK location:
+
+```text
+android/app/build/outputs/apk/debug/app-debug.apk
+```
+
+---
+
+## If APK build fails
+
+Common fixes:
+
+- Ensure `ANDROID_HOME` is set and SDK tools are installed.
+- In Android Studio, install a recent Android SDK Platform + Build-Tools.
+- Run once in Android Studio to auto-accept SDK components.
+- If Gradle fails from CLI, use:
+
+```bash
+npx cap open android
+```
+
+Then build from Android Studio: `Build > Build APK(s)`.
+
+## Gameplay notes
+
+- Difficulty target: hard but fair.
+- Ghost enters hunt mode when line-of-sight is established and you are not hiding.
+- Running drains stamina; hiding lowers ghost detection chance.
+- Win by unlocking and reaching the basement gate.
