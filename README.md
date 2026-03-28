@@ -98,6 +98,16 @@ android/app/build/outputs/apk/debug/app-debug.apk
 
 ---
 
+
+### If you do not see the action
+
+Do these checks:
+
+1. Make sure this file exists in your repo: `.github/workflows/build-apk.yml`.
+2. Push to `main` (or open a PR) at least once — the workflow now auto-appears on push/PR.
+3. In GitHub repo settings, ensure **Actions** are enabled.
+4. If this is a fork, enable Actions in the fork (forks can have Actions disabled by default).
+
 ## If APK build fails
 
 Common fixes:
