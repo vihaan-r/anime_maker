@@ -1,0 +1,45 @@
+{
+  "title": "Whispering Shadows",
+  "tagline": "Some secrets never die… they wait.",
+  "platforms": ["android", "ios"],
+  "engine": "Unity 2022.3 LTS (URP)",
+  "target_file_size_mb": 380,
+  "gameplay": {
+    "camera": {"mode": "first_person", "fov_default": 70, "gyro_optional": true},
+    "controls": {
+      "movement": "virtual_joystick",
+      "look": "touch_drag_or_gyro",
+      "buttons": ["action", "sprint", "crouch", "inventory", "hold_breath"]
+    },
+    "systems": {
+      "stamina_seconds": 5,
+      "stamina_recharge_seconds": 3,
+      "sanity_max": 100,
+      "inventory_slots": 6,
+      "day_length_minutes": 20,
+      "max_days": 7
+    }
+  },
+  "specter_ai": {
+    "states": ["patrol", "search", "hunt", "lost"],
+    "vision": {"fov": 120, "range_m": 20},
+    "hearing": {"walk_m": 8, "run_m": 15, "drop_m": 5},
+    "night_abilities": ["anchor_teleport", "shadow_dash", "room_lockdown"]
+  },
+  "endings": [
+    "ritual",
+    "forgiveness",
+    "curse",
+    "secret_passage"
+  ],
+  "rooms": {
+    "target_count": 20,
+    "zones": ["ground_floor", "second_floor", "basement", "attic", "garden"]
+  },
+  "production": {
+    "pre_production_months": 2,
+    "production_months": 8,
+    "polish_months": 2,
+    "qa_months": 1.5
+  }
+}

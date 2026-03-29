@@ -1,20 +1,38 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# Whispering Shadows AI (Android Local Chatbot)
 
-# Run and deploy your AI Studio app
+This repository now includes an **Android chatbot app** which runs **HuggingFaceTB/SmolLM2-135M-Instruct locally on-device**.
 
-This contains everything you need to run your app locally.
+## What was added
 
-View your app in AI Studio: https://ai.studio/apps/drive/1rj-_y-GIqEmDVeuJwDlEco9Cb3K8XPP9
+- Native Android app in `android-chatbot/` (Jetpack Compose UI).
+- Local Python inference bridge via Chaquopy (`android-chatbot/app/src/main/python/chatbot.py`).
+- Model expected in app assets at:
+  - `app/src/main/assets/models/HuggingFaceTB/SmolLM2-135M-Instruct`
+- GitHub Action to download model safetensors and build APK:
+  - `.github/workflows/build-chatbot-apk.yml`
+- Local helper script:
+  - `scripts/build_chatbot_apk.sh`
 
-## Run Locally
+## Build APK in GitHub Actions (recommended)
 
-**Prerequisites:**  Node.js
+1. Push to GitHub.
+2. Open **Actions**.
+3. Run **Build Local AI Chatbot APK**.
+4. Download artifact `whispering-shadows-ai-debug-apk`.
 
+## Local build
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+```bash
+./scripts/build_chatbot_apk.sh
+```
+
+APK output:
+
+```text
+android-chatbot/app/build/outputs/apk/debug/app-debug.apk
+```
+
+## Notes
+
+- This flow downloads model files (including safetensors) from Hugging Face during build and packages them into the APK assets.
+- Model packaging can significantly increase APK size.
