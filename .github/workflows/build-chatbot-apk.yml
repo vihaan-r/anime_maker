@@ -1,0 +1,59 @@
+name: Build Local AI Chatbot APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, master, work]
+    paths:
+      - "android-chatbot/**"
+      - ".github/workflows/build-chatbot-apk.yml"
+
+jobs:
+  build-chatbot:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: android-chatbot
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Download SmolLM2 model safetensors from HuggingFace
+        env:
+          HF_HUB_ENABLE_HF_TRANSFER: 1
+        run: |
+          python -m pip install --upgrade pip huggingface_hub
+          python - <<'PY'
+from huggingface_hub import snapshot_download
+snapshot_download(
+    repo_id="HuggingFaceTB/SmolLM2-135M-Instruct",
+    local_dir="app/src/main/assets/models/HuggingFaceTB/SmolLM2-135M-Instruct",
+    local_dir_use_symlinks=False,
+)
+print("Model downloaded into app assets.")
+PY
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build debug APK
+        run: ./gradlew :app:assembleDebug
+
+      - name: Upload chatbot APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: whispering-shadows-ai-debug-apk
+          path: android-chatbot/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
