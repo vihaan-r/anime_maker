@@ -12,13 +12,15 @@ jobs:
   benchmark:
     runs-on: ubuntu-latest
     timeout-minutes: 90
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.11'
 
@@ -29,13 +31,14 @@ jobs:
 
       - name: Run XLINE benchmark (5 models)
         run: |
-          python scripts/xline/benchmark.py --output-dir artifacts
+          python scripts/xline/benchmark.py --output-dir artifacts --steps 1 --batch-size 2 --seq-len 32
 
       - name: Upload benchmark artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: xline-benchmark-artifacts
           path: |
             artifacts/xline_benchmark_results.csv
             artifacts/xline_benchmark_results.json
+            artifacts/xline_failures.json
             artifacts/screenshots/*.png

@@ -8,8 +8,8 @@ step against the XLINE controller strategy, and exports metrics + figures.
 from __future__ import annotations
 
 import argparse
-import copy
 import csv
+import gc
 import json
 import math
 import os
@@ -17,7 +17,7 @@ import statistics
 import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Dict, Iterable, List
+from typing import Dict, List
 
 import matplotlib.pyplot as plt
 import torch
@@ -53,6 +53,12 @@ class MetricRow:
     trainable_pct: float
     avg_step_ms: float
     peak_memory_mb: float
+
+
+@dataclass
+class FailureRow:
+    model: str
+    error: str
 
 
 class XLineController(nn.Module):
@@ -161,8 +167,7 @@ def install_xline_hooks(model: nn.Module, bottleneck: int) -> tuple[nn.ModuleLis
     return controllers, handles
 
 
-def build_xline_model(base_model: nn.Module, bottleneck: int) -> nn.Module:
-    model = copy.deepcopy(base_model)
+def build_xline_model(model: nn.Module, bottleneck: int) -> nn.Module:
     for p in model.parameters():
         p.requires_grad = False
     controllers, handles = install_xline_hooks(model, bottleneck=bottleneck)
@@ -185,6 +190,8 @@ def percentage_delta(before: float, after: float) -> float:
 
 
 def render_figures(rows: List[MetricRow], output_dir: Path) -> None:
+    if not rows:
+        return
     models = sorted({r.model for r in rows})
     baseline_time = {r.model: r.avg_step_ms for r in rows if r.scenario == "baseline"}
     xline_time = {r.model: r.avg_step_ms for r in rows if r.scenario == "xline"}
@@ -218,22 +225,29 @@ def render_figures(rows: List[MetricRow], output_dir: Path) -> None:
     plt.close()
 
 
-def write_outputs(rows: List[MetricRow], output_root: Path) -> None:
+def write_outputs(rows: List[MetricRow], failures: List[FailureRow], output_root: Path) -> None:
     output_root.mkdir(parents=True, exist_ok=True)
     screenshots = output_root / "screenshots"
     screenshots.mkdir(parents=True, exist_ok=True)
 
     json_path = output_root / "xline_benchmark_results.json"
     csv_path = output_root / "xline_benchmark_results.csv"
+    failures_path = output_root / "xline_failures.json"
 
     with json_path.open("w", encoding="utf-8") as f:
         json.dump([asdict(r) for r in rows], f, indent=2)
 
     with csv_path.open("w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=list(asdict(rows[0]).keys()))
-        writer.writeheader()
-        for row in rows:
-            writer.writerow(asdict(row))
+        if rows:
+            writer = csv.DictWriter(f, fieldnames=list(asdict(rows[0]).keys()))
+            writer.writeheader()
+            for row in rows:
+                writer.writerow(asdict(row))
+        else:
+            f.write("model,scenario,params_trainable,params_total,trainable_pct,avg_step_ms,peak_memory_mb\n")
+
+    with failures_path.open("w", encoding="utf-8") as f:
+        json.dump([asdict(r) for r in failures], f, indent=2)
 
     render_figures(rows, screenshots)
 
@@ -270,48 +284,64 @@ def main() -> None:
     print(f"Using device: {device}")
 
     rows: List[MetricRow] = []
+    failures: List[FailureRow] = []
 
     for model_id in args.models:
         print(f"\nLoading model: {model_id}")
-        tokenizer = AutoTokenizer.from_pretrained(model_id)
-        base_model = AutoModel.from_pretrained(model_id).to(device)
-        batch = prepare_batch(tokenizer, device, args.seq_len, args.batch_size)
+        try:
+            tokenizer = AutoTokenizer.from_pretrained(model_id)
+            baseline_model = AutoModel.from_pretrained(model_id).to(device)
+            batch = prepare_batch(tokenizer, device, args.seq_len, args.batch_size)
 
-        baseline_model = copy.deepcopy(base_model)
-        for p in baseline_model.parameters():
-            p.requires_grad = True
-        b_trainable, b_total = count_parameters(baseline_model)
-        b_ms, b_peak = benchmark_steps(baseline_model, batch, device, args.steps, args.lr)
-        rows.append(
-            MetricRow(
-                model=model_id,
-                scenario="baseline",
-                params_trainable=b_trainable,
-                params_total=b_total,
-                trainable_pct=(b_trainable / b_total) * 100,
-                avg_step_ms=b_ms,
-                peak_memory_mb=b_peak,
+            for p in baseline_model.parameters():
+                p.requires_grad = True
+            b_trainable, b_total = count_parameters(baseline_model)
+            b_ms, b_peak = benchmark_steps(baseline_model, batch, device, args.steps, args.lr)
+            rows.append(
+                MetricRow(
+                    model=model_id,
+                    scenario="baseline",
+                    params_trainable=b_trainable,
+                    params_total=b_total,
+                    trainable_pct=(b_trainable / b_total) * 100,
+                    avg_step_ms=b_ms,
+                    peak_memory_mb=b_peak,
+                )
             )
-        )
+            del baseline_model
+            gc.collect()
+            if device.type == "cuda":
+                torch.cuda.empty_cache()
 
-        xline_model = build_xline_model(base_model, bottleneck=args.bottleneck).to(device)
-        x_trainable, x_total = count_parameters(xline_model)
-        x_ms, x_peak = benchmark_steps(xline_model, batch, device, args.steps, args.lr)
-        teardown_xline(xline_model)
-        rows.append(
-            MetricRow(
-                model=model_id,
-                scenario="xline",
-                params_trainable=x_trainable,
-                params_total=x_total,
-                trainable_pct=(x_trainable / x_total) * 100,
-                avg_step_ms=x_ms,
-                peak_memory_mb=x_peak,
+            xline_model = AutoModel.from_pretrained(model_id).to(device)
+            xline_model = build_xline_model(xline_model, bottleneck=args.bottleneck).to(device)
+            x_trainable, x_total = count_parameters(xline_model)
+            x_ms, x_peak = benchmark_steps(xline_model, batch, device, args.steps, args.lr)
+            teardown_xline(xline_model)
+            rows.append(
+                MetricRow(
+                    model=model_id,
+                    scenario="xline",
+                    params_trainable=x_trainable,
+                    params_total=x_total,
+                    trainable_pct=(x_trainable / x_total) * 100,
+                    avg_step_ms=x_ms,
+                    peak_memory_mb=x_peak,
+                )
             )
-        )
+            del xline_model
+            gc.collect()
+            if device.type == "cuda":
+                torch.cuda.empty_cache()
+        except Exception as exc:  # noqa: BLE001
+            print(f"  [WARN] Skipping model due to error: {exc}")
+            failures.append(FailureRow(model=model_id, error=str(exc)))
 
-    write_outputs(rows, Path(args.output_dir))
-    print_report(rows)
+    write_outputs(rows, failures, Path(args.output_dir))
+    if rows:
+        print_report(rows)
+    else:
+        print("\nNo models completed successfully. Check artifacts/xline_failures.json for details.")
 
 
 if __name__ == "__main__":

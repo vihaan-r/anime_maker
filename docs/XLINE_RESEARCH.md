@@ -26,6 +26,7 @@ This project evaluates XLINE, a protocol that injects lightweight trainable cont
    - train only XLINE controller parameters.
 4. Collect metrics and compute percentage deltas.
 5. Save CSV/JSON and chart images for reproducible proof.
+6. If a model cannot be downloaded in the current environment, the error is recorded in `artifacts/xline_failures.json` without crashing the whole run.
 
 ## Model Set (5 sizes)
 

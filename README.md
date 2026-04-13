@@ -31,6 +31,7 @@ After running, you get:
 
 - `artifacts/xline_benchmark_results.csv`
 - `artifacts/xline_benchmark_results.json`
+- `artifacts/xline_failures.json` (contains any model download/runtime errors)
 - `artifacts/screenshots/time_comparison.png`
 - `artifacts/screenshots/trainable_params.png`
 
