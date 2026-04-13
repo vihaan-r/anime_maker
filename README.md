@@ -1,20 +1,50 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# XLINE Protocol — Universal Model Execution Framework
 
-# Run and deploy your AI Studio app
+Built by **Vihaan (14 years old)**.
 
-This contains everything you need to run your app locally.
+I created XLINE because I wanted to build a stronger PC, but RAM prices were too high. Instead of waiting for better hardware, I designed a method that makes existing AI models cheaper to adapt: **freeze the full model and only train a tiny external controller**.
 
-View your app in AI Studio: https://ai.studio/apps/drive/1rj-_y-GIqEmDVeuJwDlEco9Cb3K8XPP9
+## What this repo now contains
 
-## Run Locally
+- A full XLINE benchmark pipeline with real pretrained models (5 different sizes).
+- Automatic baseline vs XLINE computation comparison.
+- Percent reduction reporting in terminal.
+- Generated visual proof (PNG charts) saved as `artifacts/screenshots/`.
+- A GitHub Action to run the entire benchmark and upload evidence artifacts.
+- A research-style write-up in `docs/XLINE_RESEARCH.md`.
 
-**Prerequisites:**  Node.js
+## XLINE in one line
 
+**Base model = frozen brain** + **XLINE controller = lightweight steering layer**.
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+## Run locally
+
+```bash
+python -m pip install --upgrade pip
+pip install -r scripts/xline/requirements.txt
+python scripts/xline/benchmark.py --output-dir artifacts
+```
+
+## Expected outputs
+
+After running, you get:
+
+- `artifacts/xline_benchmark_results.csv`
+- `artifacts/xline_benchmark_results.json`
+- `artifacts/screenshots/time_comparison.png`
+- `artifacts/screenshots/trainable_params.png`
+
+The terminal prints per-model:
+
+- baseline step time
+- XLINE step time
+- time reduction percentage
+- trainable parameter reduction percentage
+
+## GitHub Actions
+
+Workflow file:
+
+- `.github/workflows/xline-benchmark.yml`
+
+It installs dependencies, runs the benchmark for 5 models, and uploads all proof artifacts.
